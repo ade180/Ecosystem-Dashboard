@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ecosystem Health Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root{
+  --bg:#0a1a0a;--bg-card:rgba(255,255,255,0.04);--bg-mid:#0f2614;
+  --bg-nav:#07100a;--border:rgba(255,255,255,0.07);--border-bright:rgba(122,179,74,0.25);
+  --text:#f0fdf0;--text-muted:rgba(240,253,240,0.5);--text-faint:rgba(240,253,240,0.28);
+  --grid:rgba(255,255,255,0.05);--tick:rgba(240,253,240,0.32);
+  --green-bright:#4ade80;--green-mid:#86c88a;--green-dark:#2d7a3d;
+  --earth:#c8a97e;--sky:#93c5fd;--amber:#fbbf24;
+  --up:rgba(74,222,128,1);--up-bg:rgba(74,222,128,0.12);
+  --warn:rgba(251,191,36,1);--warn-bg:rgba(251,191,36,0.12);
+  --dn:rgba(248,113,113,1);--dn-bg:rgba(248,113,113,0.12);
+  --radius:10px;--radius-sm:6px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;font-family:'Inter',-apple-system,sans-serif;font-size:14px;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;}
+button,select{font-family:inherit;cursor:pointer;}
+
+/* ===== TOP BAR ===== */
+.topbar{background:var(--bg-nav);padding:0 28px;height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);flex-shrink:0;position:sticky;top:0;z-index:40;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{font-size:22px;}
+.logo-text{font-family:'Playfair Display',serif;font-size:17px;font-weight:700;color:var(--text);letter-spacing:-0.01em;}
+.logo-text span{color:var(--green-bright);}
+.topbar-controls{display:flex;align-items:center;gap:8px;}
+.ctrl-select{background:rgba(255,255,255,0.06);border:0.5px solid var(--border-bright);border-radius:var(--radius-sm);padding:6px 11px;font-size:12px;color:rgba(240,253,240,0.7);outline:none;font-family:'Inter',sans-serif;}
+.ctrl-btn{padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;border:none;cursor:pointer;transition:all .15s;}
+.ctrl-btn.ghost{background:rgba(255,255,255,0.06);color:rgba(240,253,240,0.6);border:0.5px solid var(--border);}
+.ctrl-btn.ghost:hover{background:rgba(255,255,255,0.1);color:var(--text);}
+.ctrl-btn.primary{background:var(--green-dark);color:#fff;}
+.ctrl-btn.primary:hover{background:#3a8c4a;}
+.topbar-status{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);}
+.status-dot{width:7px;height:7px;border-radius:50%;background:var(--green-bright);box-shadow:0 0 8px var(--green-bright);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+
+/* ===== LAYOUT ===== */
+.app{display:flex;flex-direction:column;min-height:100vh;}
+.main{flex:1;padding:26px 28px;max-width:1440px;margin:0 auto;width:100%;}
+.section-hdr{margin-bottom:22px;}
+.section-title{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;color:var(--text);}
+.section-sub{font-size:12px;color:var(--text-muted);margin-top:3px;}
+
+/* ===== KPI CARDS ===== */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+.kpi-card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius);padding:18px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kpi-color,var(--green-bright));}
+.kpi-card:hover{border-color:var(--border-bright);}
+.kpi-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:10px;}
+.kpi-val{font-size:30px;font-weight:900;color:var(--text);letter-spacing:-.04em;line-height:1;}
+.kpi-unit{font-size:14px;font-weight:400;color:var(--text-muted);margin-left:2px;}
+.kpi-change{font-size:11.5px;font-weight:600;margin-top:6px;}
+.kpi-change.up{color:var(--up);}
+.kpi-change.warn{color:var(--warn);}
+.kpi-change.dn{color:var(--dn);}
+.kpi-gauge{height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;margin-top:10px;}
+.kpi-gauge-fill{height:100%;border-radius:2px;background:var(--kpi-color,var(--green-bright));transition:width .5s;}
+
+/* ===== CHART CARDS ===== */
+.charts-row-1{display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;}
+.charts-row-2{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+.chart-card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius);padding:20px;transition:background .2s;}
+.chart-hdr{margin-bottom:16px;display:flex;align-items:flex-start;justify-content:space-between;}
+.chart-title{font-size:14px;font-weight:700;color:var(--text);}
+.chart-sub{font-size:11.5px;color:var(--text-muted);margin-top:2px;}
+.chart-wrap{position:relative;}
+.chart-wrap.tall{height:240px;}
+.chart-wrap.medium{height:190px;}
+.chart-wrap.short{height:160px;}
+
+/* ===== SPECIES TABLE ===== */
+.species-table-card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:20px;}
+.stc-hdr{padding:14px 20px;border-bottom:0.5px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.stc-title{font-size:14px;font-weight:700;color:var(--text);}
+.species-table{width:100%;border-collapse:collapse;}
+.species-table th{text-align:left;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;padding:10px 20px;border-bottom:.5px solid var(--border);}
+.species-table td{padding:11px 20px;font-size:13px;border-bottom:.5px solid rgba(255,255,255,0.03);}
+.species-table tr:last-child td{border-bottom:none;}
+.species-table tr:hover td{background:rgba(255,255,255,0.02);}
+.health-bar{width:80px;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;}
+.health-fill{height:100%;border-radius:3px;}
+.sp-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:99px;}
+.sp-up{background:var(--up-bg);color:var(--up);}
+.sp-warn{background:var(--warn-bg);color:var(--warn);}
+.sp-dn{background:var(--dn-bg);color:var(--dn);}
+
+/* ===== METRICS GRID ===== */
+.metrics-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px;}
+.metric-card{background:var(--bg-card);border:0.5px solid var(--border);border-radius:var(--radius);padding:16px;}
+.metric-name{font-size:11.5px;color:var(--text-muted);margin-bottom:5px;}
+.metric-val{font-size:20px;font-weight:800;color:var(--text);letter-spacing:-.02em;}
+.metric-badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;margin-top:5px;display:inline-block;}
+
+/* ===== ALERT STRIP ===== */
+.alert-strip{background:var(--warn-bg);border:0.5px solid var(--warn-bg);border-radius:var(--radius-sm);padding:11px 16px;font-size:13px;color:var(--warn);margin-bottom:16px;display:flex;align-items:center;gap:9px;}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:1000px){
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .charts-row-1{grid-template-columns:1fr;}
+  .charts-row-2{grid-template-columns:1fr;}
+  .metrics-row{grid-template-columns:repeat(2,1fr);}
+  .main{padding:16px;}
+}
+@media print{
+  .topbar{display:none!important;}
+  body{background:#fff!important;color:#1a3308!important;}
+  .kpi-card,.chart-card,.species-table-card{background:#fff!important;border-color:#ddd!important;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="logo">
+      <span class="logo-icon">🌿</span>
+      <div class="logo-text">Ecosystem <span>Health</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;">
+      <div class="topbar-status"><div class="status-dot"></div>Live Monitoring</div>
+      <div class="topbar-controls">
+        <select class="ctrl-select" id="habitat-sel" onchange="filterHabitat(this.value)" aria-label="Select habitat">
+          <option value="all">All Habitats</option>
+          <option value="woodland">Woodland</option>
+          <option value="wetland">Wetland</option>
+          <option value="grassland">Grassland</option>
+          <option value="urban">Urban Green</option>
+        </select>
+        <select class="ctrl-select" id="season-sel" onchange="filterSeason(this.value)" aria-label="Select season">
+          <option value="summer">Summer 2026</option>
+          <option value="spring">Spring 2026</option>
+          <option value="winter">Winter 2025</option>
+          <option value="autumn">Autumn 2025</option>
+        </select>
+        <button class="ctrl-btn ghost" onclick="window.print()">↓ Report</button>
+        <button class="ctrl-btn primary" onclick="refreshData()">↻ Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="section-hdr">
+      <div class="section-title">Ecosystem Health Monitor</div>
+      <div class="section-sub" id="monitor-sub">South London Green Corridors · Summer 2026 · Data from field sensors &amp; citizen science</div>
+    </div>
+
+    <!-- ALERT -->
+    <div class="alert-strip" id="alert-strip">
+      ⚠ Grassland Biodiversity Index below seasonal threshold — suspected drought stress. Last rainfall: 11 days ago.
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid" id="kpi-grid" role="list" aria-label="Ecosystem health indicators"></div>
+
+    <!-- CHARTS ROW 1 -->
+    <div class="charts-row-1">
+      <div class="chart-card">
+        <div class="chart-hdr">
+          <div><div class="chart-title">Biodiversity Index Trend</div><div class="chart-sub">12-month rolling — higher = healthier ecosystem</div></div>
+        </div>
+        <div class="chart-wrap tall"><canvas id="biodiversity-chart" aria-label="Biodiversity index trend over 12 months"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-hdr"><div><div class="chart-title">Species by Kingdom</div><div class="chart-sub">Current season distribution</div></div></div>
+        <div class="chart-wrap medium"><canvas id="species-chart" aria-label="Species distribution by kingdom doughnut chart"></canvas></div>
+        <div id="species-legend" role="list" style="margin-top:12px;display:flex;flex-direction:column;gap:5px;"></div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div class="charts-row-2">
+      <div class="chart-card">
+        <div class="chart-hdr"><div><div class="chart-title">Water Quality Index</div><div class="chart-sub">Monthly pH &amp; oxygen readings</div></div></div>
+        <div class="chart-wrap short"><canvas id="water-chart" aria-label="Water quality index over 6 months"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-hdr"><div><div class="chart-title">Pollinator Activity</div><div class="chart-sub">Hourly counts · 6-month avg</div></div></div>
+        <div class="chart-wrap short"><canvas id="pollinator-chart" aria-label="Pollinator activity bar chart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-hdr"><div><div class="chart-title">Soil Health Score</div><div class="chart-sub">Organic matter · pH · structure</div></div></div>
+        <div class="chart-wrap short"><canvas id="soil-chart" aria-label="Soil health radar chart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ADDITIONAL METRICS -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-name">Carbon Sequestration Estimate</div>
+        <div class="metric-val">4.2 t CO₂/ha</div>
+        <span class="metric-badge sp-up">↑ Above UK average</span>
+      </div>
+      <div class="metric-card">
+        <div class="metric-name">Days Since Last Rainfall</div>
+        <div class="metric-val">11 days</div>
+        <span class="metric-badge sp-warn">⚠ Monitor moisture</span>
+      </div>
+      <div class="metric-card">
+        <div class="metric-name">Invasive Species Alerts</div>
+        <div class="metric-val">2 active</div>
+        <span class="metric-badge sp-dn">Japanese Knotweed · Grey Squirrel</span>
+      </div>
+      <div class="metric-card">
+        <div class="metric-name">Rare Species Recorded</div>
+        <div class="metric-val">7 species</div>
+        <span class="metric-badge sp-up">↑ 2 new this season</span>
+      </div>
+      <div class="metric-card">
+        <div class="metric-name">Tree Canopy Cover</div>
+        <div class="metric-val">38%</div>
+        <span class="metric-badge sp-up">↑ Target: 35%</span>
+      </div>
+      <div class="metric-card">
+        <div class="metric-name">Citizen Science Reports</div>
+        <div class="metric-val">1,247</div>
+        <span class="metric-badge sp-up">↑ 18% this month</span>
+      </div>
+    </div>
+
+    <!-- SPECIES TABLE -->
+    <div class="species-table-card">
+      <div class="stc-hdr">
+        <div class="stc-title">Monitored Species Register</div>
+        <span style="font-size:12px;color:var(--text-muted);">247 species logged this season</span>
+      </div>
+      <table class="species-table" aria-label="Monitored species register">
+        <thead><tr><th>Species</th><th>Kingdom</th><th>Habitat</th><th>Population</th><th>Trend</th><th>Health</th></tr></thead>
+        <tbody id="species-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+Chart.defaults.font.family = "'Inter', sans-serif";
+
+/* ===== DATA ===== */
+const MONTHS = ['Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr','May','Jun'];
+const BIODIVERSITY = [68.2,70.4,65.1,58.3,54.2,51.8,53.6,60.4,67.8,72.1,75.6,73.4];
+const WATER_PH = [7.1,7.0,7.2,7.3,7.1,6.9,6.8,7.0,7.2,7.4,7.3,7.1];
+const WATER_O2 = [8.9,8.7,9.1,9.4,9.2,9.0,8.8,9.1,9.3,9.5,9.4,9.2];
+const POLLINATOR = [12,45,82,95,110,98,88,104,118,124,132,128];
+const SPECIES_DATA = [
+  {name:'Common Bluebell',lat:'Hyacinthoides non-scripta',kingdom:'Plant',habitat:'Woodland',population:'Abundant',trend:'Stable',health:82},
+  {name:'Holly Blue Butterfly',lat:'Celastrina argiolus',kingdom:'Insect',habitat:'Urban Green',population:'Common',trend:'Increasing',health:76},
+  {name:'Song Thrush',lat:'Turdus philomelos',kingdom:'Bird',habitat:'Grassland',population:'Moderate',trend:'Declining',health:48},
+  {name:'Common Toad',lat:'Bufo bufo',kingdom:'Amphibian',habitat:'Wetland',population:'Declining',trend:'Declining',health:35},
+  {name:'Wood Anemone',lat:'Anemone nemorosa',kingdom:'Plant',habitat:'Woodland',population:'Common',trend:'Stable',health:88},
+  {name:'Buff-tailed Bumblebee',lat:'Bombus terrestris',kingdom:'Insect',habitat:'Grassland',population:'Abundant',trend:'Increasing',health:91},
+  {name:'Kingfisher',lat:'Alcedo atthis',kingdom:'Bird',habitat:'Wetland',population:'Rare',trend:'Stable',health:62},
+  {name:'Common Pipistrelle',lat:'Pipistrellus pipistrellus',kingdom:'Mammal',habitat:'Urban Green',population:'Common',trend:'Increasing',health:74},
+];
+const SOIL = {
+  labels:['Organic Matter','pH Balance','Structure','Microbial Activity','Nitrogen','Moisture'],
+  data:[72,88,65,70,58,42]
+};
+
+/* ===== KPI CARDS ===== */
+function renderKPIs(){
+  const cards=[
+    {label:'Biodiversity Index',val:'73.4',unit:'',change:'↑ 2.1 pts vs last month',dir:'up',gauge:73,color:'var(--green-bright)'},
+    {label:'Soil pH Average',val:'7.1',unit:'',change:'Optimal range: 6.5–7.5 ✓',dir:'up',gauge:78,color:'var(--earth)'},
+    {label:'Water Quality Score',val:'8.2',unit:'/10',change:'↓ 0.3 post-drought concern',dir:'warn',gauge:82,color:'var(--sky)'},
+    {label:'Species Count',val:'247',unit:'',change:'↑ 14 new this season',dir:'up',gauge:68,color:'var(--amber)'},
+  ];
+  document.getElementById('kpi-grid').innerHTML=cards.map(c=>`
+    <div class="kpi-card" style="--kpi-color:${c.color};" role="listitem">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-val">${c.val}<span class="kpi-unit">${c.unit}</span></div>
+      <div class="kpi-change ${c.dir}">${c.change}</div>
+      <div class="kpi-gauge"><div class="kpi-gauge-fill" style="width:${c.gauge}%;background:${c.color};"></div></div>
+    </div>`).join('');
+}
+
+/* ===== SPECIES TABLE ===== */
+function renderSpeciesTable(data){
+  const trendBadge=t=>t==='Increasing'?`<span class="sp-badge sp-up">↑ Increasing</span>`:t==='Declining'?`<span class="sp-badge sp-dn">↓ Declining</span>`:`<span class="sp-badge sp-warn">→ Stable</span>`;
+  const healthColor=h=>h>=70?'var(--up)':h>=50?'var(--warn)':'var(--dn)';
+  document.getElementById('species-tbody').innerHTML=data.map(s=>`
+    <tr>
+      <td><strong>${s.name}</strong><br><span style="font-size:11px;color:var(--text-faint);font-style:italic;">${s.lat}</span></td>
+      <td style="font-size:12px;color:var(--text-muted);">${s.kingdom}</td>
+      <td style="font-size:12px;color:var(--text-muted);">${s.habitat}</td>
+      <td style="font-size:12.5px;">${s.population}</td>
+      <td>${trendBadge(s.trend)}</td>
+      <td><div class="health-bar"><div class="health-fill" style="width:${s.health}%;background:${healthColor(s.health)};"></div></div><span style="font-size:10px;color:var(--text-faint);margin-left:6px;">${s.health}%</span></td>
+    </tr>`).join('');
+}
+
+/* ===== CHARTS ===== */
+const C={grid:'rgba(255,255,255,0.05)',tick:'rgba(240,253,240,0.32)',tooltip:{bg:'#0f2614',body:'#f0fdf0'},green:'#4ade80',sage:'#86c88a',earth:'#c8a97e',sky:'#93c5fd',amber:'#fbbf24',navy:'#2d7a3d'};
+const scaleX={grid:{display:false},border:{display:false},ticks:{color:C.tick,font:{size:11}}};
+const scaleY={grid:{color:C.grid},border:{display:false},ticks:{color:C.tick,font:{size:11}}};
+const tip={backgroundColor:C.tooltip.bg,bodyColor:C.tooltip.body,titleColor:C.tick,padding:10,cornerRadius:8};
+
+function initCharts(){
+  /* Biodiversity trend */
+  const bCtx=document.getElementById('biodiversity-chart');
+  if(bCtx)new Chart(bCtx,{type:'line',data:{labels:MONTHS,datasets:[
+    {label:'Biodiversity Index',data:BIODIVERSITY,borderColor:C.green,backgroundColor:'rgba(74,222,128,0.08)',fill:true,tension:0.4,borderWidth:2.5,pointBackgroundColor:C.green,pointBorderColor:'#0a1a0a',pointBorderWidth:2,pointRadius:4,pointHoverRadius:6},
+    {label:'Target (70)',data:Array(12).fill(70),borderColor:'rgba(251,191,36,0.4)',borderDash:[6,4],borderWidth:1.5,pointRadius:0,fill:false}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{color:C.tick,font:{size:12},boxWidth:12}},tooltip:{...tip,callbacks:{label:c=>`  ${c.dataset.label}: ${c.raw}`}}},
+    scales:{x:scaleX,y:{...scaleY,min:40,max:90,ticks:{...scaleY.ticks,callback:v=>v}}}}});
+
+  /* Species doughnut */
+  const sCtx=document.getElementById('species-chart');
+  const sLabels=['Plants','Insects','Birds','Fungi','Mammals','Amphibians'];
+  const sData=[89,74,38,22,18,6];
+  const sColors=['#4ade80','#86c88a','#93c5fd','#c8a97e','#fbbf24','#f87171'];
+  if(sCtx){
+    new Chart(sCtx,{type:'doughnut',data:{labels:sLabels,datasets:[{data:sData,backgroundColor:sColors,borderWidth:0,hoverOffset:6}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>`  ${c.label}: ${c.raw} species`}}}}});
+    document.getElementById('species-legend').innerHTML=sLabels.map((l,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;" role="listitem"><div style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);"><div style="width:8px;height:8px;border-radius:50%;background:${sColors[i]};flex-shrink:0;"></div>${l}</div><div style="font-size:12px;font-weight:600;color:var(--text);">${sData[i]}</div></div>`).join('');
+  }
+
+  /* Water quality */
+  const wCtx=document.getElementById('water-chart');
+  if(wCtx)new Chart(wCtx,{type:'line',data:{labels:MONTHS.slice(-6),datasets:[
+    {label:'pH',data:WATER_PH.slice(-6),borderColor:C.sky,fill:false,tension:0.4,borderWidth:2,pointRadius:3},
+    {label:'O₂ (mg/L)',data:WATER_O2.slice(-6),borderColor:C.sage,fill:false,tension:0.4,borderWidth:2,pointRadius:3}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:C.tick,font:{size:11},boxWidth:10}},tooltip:{...tip}},scales:{x:scaleX,y:{...scaleY,min:5,max:12}}}});
+
+  /* Pollinator activity */
+  const pCtx=document.getElementById('pollinator-chart');
+  if(pCtx)new Chart(pCtx,{type:'bar',data:{labels:MONTHS,datasets:[{label:'Sightings/hr',data:POLLINATOR,backgroundColor:C.amber,hoverBackgroundColor:'#fde68a',borderRadius:3,barThickness:14}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tip,callbacks:{label:c=>`  ${c.raw} per hour`}}},scales:{x:scaleX,y:{...scaleY}}}});
+
+  /* Soil radar */
+  const soilCtx=document.getElementById('soil-chart');
+  if(soilCtx)new Chart(soilCtx,{type:'radar',data:{labels:SOIL.labels,datasets:[{label:'Soil Health',data:SOIL.data,borderColor:C.earth,backgroundColor:'rgba(200,169,126,0.15)',pointBackgroundColor:C.earth,borderWidth:2,pointRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...tip}},
+      scales:{r:{grid:{color:'rgba(255,255,255,0.07)'},ticks:{display:false},angleLines:{color:'rgba(255,255,255,0.07)'},pointLabels:{color:C.tick,font:{size:10}},min:0,max:100}}}});
+}
+
+/* ===== FILTERS ===== */
+function filterHabitat(h){
+  const filtered=h==='all'?SPECIES_DATA:SPECIES_DATA.filter(s=>s.habitat.toLowerCase().includes(h));
+  renderSpeciesTable(filtered);
+}
+function filterSeason(s){
+  document.getElementById('monitor-sub').textContent=`South London Green Corridors · ${s.charAt(0).toUpperCase()+s.slice(1)} 2026 · Filtered view`;
+}
+function refreshData(){
+  const dot=document.querySelector('.status-dot');
+  dot.style.background='var(--amber)';
+  setTimeout(()=>{dot.style.background='var(--green-bright)';},1200);
+}
+
+/* ===== INIT ===== */
+document.addEventListener('DOMContentLoaded',()=>{
+  renderKPIs();
+  renderSpeciesTable(SPECIES_DATA);
+  initCharts();
+});
+</script>
+</body>
+</html>
